@@ -173,6 +173,32 @@ public: int length;
 			  }
 		  }
 	  }
+	  void search()
+	  {
+		  int value, pos = 0;
+		  bool flag = false;
+		  if (head == NULL)
+		  {
+			  cout << "List is empty" << endl;
+			  return;
+		  }
+		  cout << "Enter the value to be searched: ";
+		  cin >> value;
+		  Node* s = new Node();
+		  s = head;
+		  while (s != NULL)
+		  {
+			  pos++;
+			  if (s->data == value)
+			  {
+				  flag = true;
+				  cout << "Element " << value << " is found at position " << pos << endl;
+			  }
+			  s = s->next;
+		  }
+		  if (!flag)
+			  cout << "Element " << value << " not found in the list" << endl;
+	  }
 
 };
 int main()
@@ -191,8 +217,9 @@ int main()
 		cout << "5. Delete Linked List at end" << endl;
 		cout << "6. Delete Linked List at given position" << endl;
 		cout << "7. sort list elements" << endl;
-		cout << "8.display all elements \n" << endl;
-		cout << "9.Exit " << endl;
+		cout << "8.display all elements" << endl;
+		cout << "9. Search for element " << endl;
+		cout << "10.Exit " << endl;
 		cout << "Enter your choice : ";
 		cin >> choice;
 		switch (choice)
@@ -246,6 +273,9 @@ int main()
 			cout << endl;
 			break;
 		case 9:
+			a.search();
+			break;
+		case 10:
 			cout << "Exiting..." << endl;
 			exit(1);
 			break;
