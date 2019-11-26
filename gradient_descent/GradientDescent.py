@@ -8,17 +8,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-#Some helper functions for plotting and drawing lines
+# Some helper functions for plotting and drawing lines
+
 
 def plot_points(X, y):
-    admitted = X[np.argwhere(y==1)]
-    rejected = X[np.argwhere(y==0)]
-    plt.scatter([s[0][0] for s in rejected], [s[0][1] for s in rejected], s = 25, color = 'blue', edgecolor = 'k')
-    plt.scatter([s[0][0] for s in admitted], [s[0][1] for s in admitted], s = 25, color = 'red', edgecolor = 'k')
+    admitted = X[np.argwhere(y == 1)]
+    rejected = X[np.argwhere(y == 0)]
+    plt.scatter([s[0][0] for s in rejected], [s[0][1]
+                                              for s in rejected], s=25, color='blue', edgecolor='k')
+    plt.scatter([s[0][0] for s in admitted], [s[0][1]
+                                              for s in admitted], s=25, color='red', edgecolor='k')
+
 
 def display(m, b, color='g--'):
-    plt.xlim(-0.05,1.05)
-    plt.ylim(-0.05,1.05)
+    plt.xlim(-0.05, 1.05)
+    plt.ylim(-0.05, 1.05)
     x = np.arange(-10, 10, 0.1)
     plt.plot(x, m*x+b, color)
 
@@ -26,34 +30,32 @@ def display(m, b, color='g--'):
 # ## Reading and plotting the data
 
 
-
 data = pd.read_csv('data.csv', header=None)
-X = np.array(data[[0,1]])
+X = np.array(data[[0, 1]])
 y = np.array(data[2])
-plot_points(X,y)
+plot_points(X, y)
 plt.show()
 
 
 # ## TODO: Implementing the basic functions
 # Here is your turn to shine. Implement the following formulas, as explained in the text.
 # - Sigmoid activation function
-# 
+#
 # $$\sigma(x) = \frac{1}{1+e^{-x}}$$
-# 
+#
 # - Output (prediction) formula
-# 
+#
 # $$\hat{y} = \sigma(w_1 x_1 + w_2 x_2 + b)$$
-# 
+#
 # - Error function
-# 
+#
 # $$Error(y, \hat{y}) = - y \log(\hat{y}) - (1-y) \log(1-\hat{y})$$
-# 
+#
 # - The function that updates the weights
-# 
+#
 # $$ w_i \longrightarrow w_i + \alpha (y - \hat{y}) x_i$$
-# 
+#
 # $$ b \longrightarrow b + \alpha (y - \hat{y})$$
-
 
 
 # Implement the following functions
@@ -63,15 +65,19 @@ def sigmoid(x):
     return (1/(1+np.exp(-x)))
 
 # Output (prediction) formula
+
+
 def output_formula(features, weights, bias):
-    return sigmoid(np.dot(features,weights)+bias)
-    
+    return sigmoid(np.dot(features, weights)+bias)
+
 
 # Error (log-loss) formula
 def error_formula(y, output):
     return -np.sum((y*np.log(output))+(1-y)*np.log(1-output))
 
 # Gradient descent step
+
+
 def update_weights(x, y, weights, bias, learnrate):
     output = output_formula(x, weights, bias)
     d_error = y - output
@@ -84,15 +90,14 @@ def update_weights(x, y, weights, bias, learnrate):
 # This function will help us iterate the gradient descent algorithm through all the data, for a number of epochs. It will also plot the data, and some of the boundary lines obtained as we run the algorithm.
 
 
-
-
 np.random.seed(44)
 
 epochs = 100
 learnrate = 0.01
 
+
 def train(features, targets, epochs, learnrate, graph_lines=False):
-    
+
     errors = []
     n_records, n_features = features.shape
     last_loss = None
@@ -104,13 +109,13 @@ def train(features, targets, epochs, learnrate, graph_lines=False):
             output = output_formula(x, weights, bias)
             error = error_formula(y, output)
             weights, bias = update_weights(x, y, weights, bias, learnrate)
-        
+
         # Printing out the log-loss error on the training set
         out = output_formula(features, weights, bias)
         loss = np.mean(error_formula(targets, out))
         errors.append(loss)
         if e % (epochs / 10) == 0:
-            print("\n========== Epoch", e,"==========")
+            print("\n========== Epoch", e, "==========")
             if last_loss and last_loss < loss:
                 print("Train loss: ", loss, "  WARNING - Loss Increasing")
             else:
@@ -121,7 +126,6 @@ def train(features, targets, epochs, learnrate, graph_lines=False):
             print("Accuracy: ", accuracy)
         if graph_lines and e % (epochs / 100) == 0:
             display(-weights[0]/weights[1], -bias/weights[1])
-            
 
     # Plotting the solution boundary
     plt.title("Solution boundary")
@@ -146,17 +150,5 @@ def train(features, targets, epochs, learnrate, graph_lines=False):
 # - A plot of the error function. Notice how it decreases as we go through more epochs.
 
 
-
 train(X, y, epochs, learnrate, True)
-
-
-
-
-
-
-
-# In[ ]:
-
-
-
 
