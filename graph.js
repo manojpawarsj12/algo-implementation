@@ -149,6 +149,51 @@ function shortestPathBFS(edges, src, dst) {
   }
   return -1;
 }
+
+function islandCount(grid) {
+  let visited = new Set();
+  let count = 0;
+  for (let i = 0; i < grid.length; i++) {
+    for (let j = 0; j < grid[0].length; j++) {
+      if (exploreIsland(grid, i, j, visited)) {
+        count++;
+      }
+    }
+  }
+  return count;
+}
+function exploreIsland(grid, r, c, visited) {
+
+  const colcheck = 0 <= c && c < grid.length;
+  const rowcheck = 0 <= r && r < grid.length;
+  if (!colcheck || !rowcheck) {
+    return false
+  }
+  if (grid[r][c] === "W") {
+    return false;
+  }
+
+  let pos = r + "," + c;
+  if (visited.has(pos)) {
+    return false;
+  }
+  visited.add(pos);
+  exploreIsland(grid, r + 1, c, visited);
+  exploreIsland(grid, r, c + 1, visited);
+  exploreIsland(grid, r - 1, c, visited);
+  exploreIsland(grid, r, c - 1, visited);
+  return true;
+}
+
+const grid = [
+  ["W", "L", "W", "W", "W"],
+  ["W", "L", "W", "W", "W"],
+  ["W", "W", "W", "L", "W"],
+  ["W", "W", "L", "L", "W"],
+  ["L", "W", "W", "L", "L"],
+  ["L", "L", "W", "W", "W"],
+];
+
 const edges = [
   ["a", "c"],
   ["a", "b"],
@@ -158,6 +203,4 @@ const edges = [
   ["e", "d"],
   ["g", "f"],
 ];
-
-console.log(shortestPathBFS(edges, "e", "c"));
- 
+console.log(islandCount(grid))
