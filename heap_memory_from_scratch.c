@@ -1,12 +1,22 @@
-#include <assert.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
+#include <assert.h>
+#include <stdlib.h>
 #include <stdint.h>
-#define CAPACITY 640000
+#define HEAP_CAP_BYTES 640000
+
+#define HEAP_CAP_WORDS (HEAP_CAP_BYTES / sizeof(uintptr_t))
+
+uintptr_t heap[HEAP_CAP_WORDS];
+const uintptr_t *stack_base;
+
+void *heap_alloc(size_t size_bytes);
+void heap_free(void *ptr);
+void heap_collect();
+
 #define CHUNK_LIST_CAP 1024
-size_t heap_size = 0;
-uintptr_t heap[CAPACITY] = {0};
+
 typedef struct
 {
     uintptr_t *start;
@@ -19,12 +29,24 @@ typedef struct
     Chunk chunks[CHUNK_LIST_CAP];
 } Chunk_List;
 
-Chunk_List allocated_chunks = {0};
-Chunk_List freed_chunks = {0};
+uintptr_t heap[HEAP_CAP_WORDS] = {0};
+const uintptr_t *stack_base = 0;
 
-void *chunk_list_insert(Chunk_List *list, uintptr_t *start, size_t size)
+bool reachable_chunks[CHUNK_LIST_CAP] = {0};
+void *to_free[CHUNK_LIST_CAP] = {0};
+size_t to_free_count = 0;
+
+Chunk_List alloced_chunks = {0};
+Chunk_List freed_chunks = {
+    .count = 1,
+    .chunks = {
+        [0] = {.start = heap, .size = sizeof(heap)}},
+};
+Chunk_List tmp_chunks = {0};
+
+void chunk_list_insert(Chunk_List *list, void *start, size_t size)
 {
-    assert(list->count <= CHUNK_LIST_CAP);
+    assert(list->count < CHUNK_LIST_CAP);
     list->chunks[list->count].start = start;
     list->chunks[list->count].size = size;
 
@@ -38,6 +60,45 @@ void *chunk_list_insert(Chunk_List *list, uintptr_t *start, size_t size)
     }
 
     list->count += 1;
+}
+
+void chunk_list_merge(Chunk_List *dst, const Chunk_List *src)
+{
+    dst->count = 0;
+
+    for (size_t i = 0; i < src->count; ++i)
+    {
+        const Chunk chunk = src->chunks[i];
+
+        if (dst->count > 0)
+        {
+            Chunk *top_chunk = &dst->chunks[dst->count - 1];
+
+            if (top_chunk->start + top_chunk->size == chunk.start)
+            {
+                top_chunk->size += chunk.size;
+            }
+            else
+            {
+                chunk_list_insert(dst, chunk.start, chunk.size);
+            }
+        }
+        else
+        {
+            chunk_list_insert(dst, chunk.start, chunk.size);
+        }
+    }
+}
+
+void chunk_list_dump(const Chunk_List *list, const char *name)
+{
+    printf("%s Chunks (%zu):\n", name, list->count);
+    for (size_t i = 0; i < list->count; ++i)
+    {
+        printf("  start: %p, size: %zu\n",
+               (void *)list->chunks[i].start,
+               list->chunks[i].size);
+    }
 }
 
 int chunk_list_find(const Chunk_List *list, uintptr_t *ptr)
@@ -62,54 +123,114 @@ void chunk_list_remove(Chunk_List *list, size_t index)
     }
     list->count -= 1;
 }
-void chunk_list_print(const Chunk_List *list, const char *name)
+
+void *heap_alloc(size_t size_bytes)
 {
-    printf("%s Chunks (%zu):\n", name, list->count);
-    for (size_t i = 0; i < list->count; ++i)
+    const size_t size_words = (size_bytes + sizeof(uintptr_t) - 1) / sizeof(uintptr_t);
+
+    if (size_words > 0)
     {
-        printf("  start: %p, size: %zu\n",
-               (void *)list->chunks[i].start,
-               list->chunks[i].size);
+        chunk_list_merge(&tmp_chunks, &freed_chunks);
+        freed_chunks = tmp_chunks;
+
+        for (size_t i = 0; i < freed_chunks.count; ++i)
+        {
+            const Chunk chunk = freed_chunks.chunks[i];
+            if (chunk.size >= size_words)
+            {
+                chunk_list_remove(&freed_chunks, i);
+
+                const size_t tail_size_words = chunk.size - size_words;
+                chunk_list_insert(&alloced_chunks, chunk.start, size_words);
+
+                if (tail_size_words > 0)
+                {
+                    chunk_list_insert(&freed_chunks, chunk.start + size_words, tail_size_words);
+                }
+
+                return chunk.start;
+            }
+        }
     }
+
+    return NULL;
 }
 
-void *heap_alloc(size_t size)
-{
-    if (size > 0)
-    {
-        assert(heap_size + size <= CAPACITY);
-        void *ptr = heap + heap_size;
-        heap_size += size;
-        chunk_list_insert(&allocated_chunks, ptr, size);
-        return ptr;
-    }
-}
-
-void heap_free(uintptr_t *ptr)
+void heap_free(void *ptr)
 {
     if (ptr != NULL)
     {
-        const int index = chunk_list_find(&allocated_chunks, ptr);
+        const int index = chunk_list_find(&alloced_chunks, ptr);
         assert(index >= 0);
-        assert(ptr == allocated_chunks.chunks[index].start);
+        assert(ptr == alloced_chunks.chunks[index].start);
         chunk_list_insert(&freed_chunks,
-                          allocated_chunks.chunks[index].start,
-                          allocated_chunks.chunks[index].size);
-        chunk_list_remove(&allocated_chunks, (size_t)index);
+                          alloced_chunks.chunks[index].start,
+                          alloced_chunks.chunks[index].size);
+        chunk_list_remove(&alloced_chunks, (size_t)index);
     }
 }
 
-int main()
+static void mark_region(const uintptr_t *start, const uintptr_t *end)
 {
-    for (int i = 0; i < 10; ++i)
+    for (; start < end; start += 1)
     {
-        void *p = heap_alloc(i);
-        if (i & 1)
+        const uintptr_t *p = (const uintptr_t *)*start;
+        for (size_t i = 0; i < alloced_chunks.count; ++i)
         {
-            heap_free(p);
+            Chunk chunk = alloced_chunks.chunks[i];
+            if (chunk.start <= p && p < chunk.start + chunk.size)
+            {
+                if (!reachable_chunks[i])
+                {
+                    reachable_chunks[i] = true;
+                    mark_region(chunk.start, chunk.start + chunk.size);
+                }
+            }
         }
     }
-    chunk_list_print(&allocated_chunks, "Alloced");
-    chunk_list_print(&freed_chunks, "Freed");
+}
+
+void heap_collect()
+{
+    const uintptr_t *stack_start = (const uintptr_t *)__builtin_frame_address(0);
+    memset(reachable_chunks, 0, sizeof(reachable_chunks));
+    mark_region(stack_start, stack_base + 1);
+
+    to_free_count = 0;
+    for (size_t i = 0; i < alloced_chunks.count; ++i)
+    {
+        if (!reachable_chunks[i])
+        {
+            assert(to_free_count < CHUNK_LIST_CAP);
+            to_free[to_free_count++] = alloced_chunks.chunks[i].start;
+        }
+    }
+
+    for (size_t i = 0; i < to_free_count; ++i)
+    {
+        heap_free(to_free[i]);
+    }
+}
+
+#define N 10
+
+void *ptrs[N] = {0};
+
+int main()
+{
+    stack_base = (const uintptr_t *)__builtin_frame_address(0);
+
+    heap_alloc(10 * sizeof(int));
+
+    printf("\n------------------------------\n");
+    heap_collect();
+    chunk_list_dump(&alloced_chunks, "Alloced");
+    chunk_list_dump(&freed_chunks, "Freed");
+    printf("------------------------------\n");
+
+    heap_collect();
+    chunk_list_dump(&alloced_chunks, "Alloced");
+    chunk_list_dump(&freed_chunks, "Freed");
+
     return 0;
 }
